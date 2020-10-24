@@ -33,13 +33,6 @@ def create_checkout_session():
 
   return jsonify(id=session.id)
 
-# @app.route('/webhook', methods=['POST'])
-# def webhook_received():
-#     request_data = json.loads(request.data)
-#     print(request_data)
-#
-#     return jsonify({'status': 'success'})
-
 @app.route('/webhook', methods=['POST'])
 def webhook_received():
     # You can use webhooks to receive information about asynchronous payment events.
@@ -69,16 +62,24 @@ def webhook_received():
     # if event_type == 'checkout.session.completed':
     #     print('🔔 Payment succeeded!')
 
+    # Add to the database the new customer
+    if event_type == 'customer.created':
+        print('A new customer was created')
+        print(data_object)
+        # Here I get the email
+        email = data_object["email"]
+        stripe_customer_id = ["id"] # This id is also in the customer.subscription.created message
+        # put that into the firestore
     if event_type == 'customer.subscription.created':
         print('A new subscriptions was created!')
-    print(data_object)
+        print(data_object)
+
 
     # I guess I can get an id for the custoemr when the customer is created
 
     # Then when a new subscription is created I associate the two
+
     # Here I need the personse credentials or some identifier
-
-
 
     return jsonify({'status': 'success'})
 
