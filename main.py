@@ -6,7 +6,11 @@ from flask_cors import CORS, cross_origin
 
 from flask import Flask, jsonify, request
 
-from nosql_db_accessor import get_all_customers, create_new_customer
+from nosql_db_accessor import (
+    get_all_customers,
+    create_new_customer,
+    update_customer_payment_status
+)
 
 # from flask import Flask, render_template, jsonify, request, send_from_directory, redirect
 app = Flask(__name__)
@@ -70,24 +74,20 @@ def webhook_received():
 
     print('event ' + event_type)
 
-    # Add to the database the new customer
-    # if event_type == 'customer.created': # Maybe I do not actually need this
-    #     print('Event: customer.created')
-    #     email = data_object["email"]
-    #     stripe_customer_id = data_object["id"]
-    #     create_new_customer(stripe_customer_id, email)
     if event_type == 'checkout.session.completed':
         print('Event: checkout.session.completed')
         client_id = data_object["client_reference_id"]
         customer_stripe_id = data_object["customer"]
         payment_status = data_object["payment_status"]
         create_new_customer(client_id, customer_stripe_id, payment_status)
-
-    # I guess I can get an id for the custoemr when the customer is created
-
-    # Then when a new subscription is created I associate the two
-
-    # Here I need the personse credentials or some identifier
+    elif event_type == 'invoice.paid':
+        print('Event: invoice.paid')
+        stripe_customer_id = data_object["customer"]
+        update_customer_payment_status(stripe_customer_id, 'paid')
+    elif event_type == 'invoice.payment_failed':
+        print('Event: invoice.payment_failed')
+        stripe_customer_id = data_object["customer"]
+        update_customer_payment_status(stripe_customer_id, 'unpaid')
 
     return jsonify({'status': 'success'})
 
