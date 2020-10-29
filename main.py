@@ -2,6 +2,7 @@ import os
 import stripe
 import json
 import datetime
+import logging
 from flask_cors import CORS, cross_origin
 
 from flask import Flask, jsonify, request
@@ -9,7 +10,8 @@ from flask import Flask, jsonify, request
 from nosql_db_accessor import (
     get_all_customers,
     create_new_customer,
-    update_customer_payment_status
+    update_customer_payment_status,
+    get_user_by_client_reference_id
 )
 
 # from flask import Flask, render_template, jsonify, request, send_from_directory, redirect
@@ -29,24 +31,44 @@ def root():
     # Fetch the most recent 10 access times from Datastore.
     return get_all_customers()
 
+"""
+############ Stripe #############
+"""
+@app.route('/get-payment-status', methods=['GET'])
+@cross_origin()
+def get_payment_status():
+    try:
+        client_reference_id = request.args.get('client_reference_id')
+        user =  get_user_by_client_reference_id(client_reference_id)
+        print(user)
+        logging.info(user)
+        return jsonify({'uid': client_reference_id, 'payment_status': "payment_status"})
+    except:
+        logging.exception("message")
+        return jsonify({'status': 'failure'}), 400
+
 @app.route('/create-checkout-session', methods=['POST'])
 @cross_origin()
 def create_checkout_session():
-  session = stripe.checkout.Session.create(
-    payment_method_types=['card'],
-    line_items=[{
-      # Replace `price_...` with the actual price ID for your subscription
-      # you created in step 2 of this guide.
-      'price': 'price_1HeNI8H4w9X1EWMYAR1N08gE',
-      'quantity': 1,
-    }],
-    client_reference_id= 'SomeTestIdThatINeedToReiveThroughTheWebHook',
-    mode='subscription',
-    success_url='http://localhost:3000/success',
-    cancel_url='http://localhost:3000/',
-  )
+    try:
+        request_data = json.loads(request.data)
+        print(request_data["client_reference_id"])
+        session = stripe.checkout.Session.create(
+            payment_method_types=['card'],
+            line_items=[{
+                'price': 'price_1HeNI8H4w9X1EWMYAR1N08gE',
+                'quantity': 1,
+            }],
+            client_reference_id = request_data["client_reference_id"],
+            mode='subscription',
+            success_url='http://localhost:3000/success',
+            cancel_url='http://localhost:3000/',
+        )
 
-  return jsonify(id=session.id)
+        return jsonify(id=session.id)
+    except:
+        logging.exception("message")
+        return jsonify({'status': 'failure'}), 400
 
 @app.route('/webhook', methods=['POST'])
 def webhook_received():
@@ -77,6 +99,7 @@ def webhook_received():
     if event_type == 'checkout.session.completed':
         print('Event: checkout.session.completed')
         client_id = data_object["client_reference_id"]
+        print(client_id)
         customer_stripe_id = data_object["customer"]
         payment_status = data_object["payment_status"]
         create_new_customer(client_id, customer_stripe_id, payment_status)

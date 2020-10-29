@@ -25,3 +25,5 @@ https://jinn-app-backend.ey.r.appspot.com
 
 This is the tutorial for setting up stripe
 Also has a section on setting the webhook stuff up for production
+
+https://stripe.com/docs/stripe-cli/webhooks
