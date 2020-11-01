@@ -39,10 +39,11 @@ def root():
 def get_payment_status():
     try:
         client_reference_id = request.args.get('client_reference_id')
-        user =  get_user_by_client_reference_id(client_reference_id)
-        print(user)
-        logging.info(user)
-        return jsonify({'uid': client_reference_id, 'payment_status': "payment_status"})
+        customer =  get_user_by_client_reference_id(client_reference_id)
+        payment_status = "UNPAID"
+        if customer:
+            payment_status = customer["payment_status"]
+        return jsonify({'uid': client_reference_id, 'payment_status': payment_status})
     except:
         logging.exception("message")
         return jsonify({'status': 'failure'}), 400
@@ -52,7 +53,6 @@ def get_payment_status():
 def create_checkout_session():
     try:
         request_data = json.loads(request.data)
-        print(request_data["client_reference_id"])
         session = stripe.checkout.Session.create(
             payment_method_types=['card'],
             line_items=[{
@@ -60,6 +60,7 @@ def create_checkout_session():
                 'quantity': 1,
             }],
             client_reference_id = request_data["client_reference_id"],
+            customer_email = request_data["email"],
             mode='subscription',
             success_url='http://localhost:3000/success',
             cancel_url='http://localhost:3000/',
