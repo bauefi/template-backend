@@ -31,17 +31,6 @@ def get_all_customers():
         print(c)
     return "Success"
 
-# def get_user_by_client_reference_id(client_reference_id):
-#     logging.info("Function call: get_user_payment_status")
-#     query = datastore_client.query(kind='customers')
-#     query.add_filter('client_id', '=', client_reference_id)
-#     customers = list(query.fetch(1)) # query fetch returns iterator
-#     assert len(customers) < 2 # Either empty or one otherwise throw execption
-#     if len(customers):
-#         return customers[0]
-#     else:
-#         return None
-
 def get_subscription_by_client_reference_id(client_reference_id):
     logging.info("Function call: get_subscription_by_client_reference_id")
     query = datastore_client.query(kind='subscription')

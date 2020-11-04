@@ -126,7 +126,7 @@ def webhook_received():
         elif event_type == 'invoice.paid':
             logging.info('Event: invoice.paid')
             stripe_subscription_id = data_object["subscription"]
-            update_subscription_payment_status(stripe_subscription_id, 'ISPAID')
+            update_subscription_payment_status(stripe_subscription_id, 'paid')
         elif event_type == 'invoice.payment_failed':
             logging.info('Event: invoice.payment_failed')
             stripe_subscription_id = data_object["subscription"]
