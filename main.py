@@ -9,9 +9,10 @@ from flask import Flask, jsonify, request
 
 from nosql_db_accessor import (
     get_all_customers,
-    create_new_customer,
-    update_customer_payment_status,
-    get_user_by_client_reference_id
+    get_subscription_by_client_reference_id,
+    update_subscription_payment_status,
+    create_new_subscription,
+    delete_subscription
 )
 
 # from flask import Flask, render_template, jsonify, request, send_from_directory, redirect
@@ -39,10 +40,10 @@ def root():
 def get_payment_status():
     try:
         client_reference_id = request.args.get('client_reference_id')
-        customer =  get_user_by_client_reference_id(client_reference_id)
+        subscription =  get_subscription_by_client_reference_id(client_reference_id)
         payment_status = "UNPAID"
-        if customer:
-            payment_status = customer["payment_status"]
+        if subscription:
+            payment_status = subscription["payment_status"]
         return jsonify({'uid': client_reference_id, 'payment_status': payment_status})
     except:
         logging.exception("message")
@@ -71,49 +72,76 @@ def create_checkout_session():
         logging.exception("message")
         return jsonify({'status': 'failure'}), 400
 
+@app.route('/cancel-subscription', methods=['POST'])
+@cross_origin()
+def cancel_subscription():
+    try:
+        request_data = json.loads(request.data)
+
+        # 1. Need to fetch the customer id from database
+        subscription = get_subscription_by_client_reference_id(request_data["client_reference_id"])
+
+        # 2. Delete the subscription
+        result = stripe.Subscription.delete(subscription.key.path[0]["name"])
+        assert result["status"] == "canceled"
+
+        return jsonify({'status': 'success'}), 200
+    except:
+        logging.exception("message")
+        return jsonify({'status': 'failure'}), 400
+
 @app.route('/webhook', methods=['POST'])
 def webhook_received():
     # You can use webhooks to receive information about asynchronous payment events.
     # For more about our webhook events check out https://stripe.com/docs/webhooks.
     # webhook_secret = os.getenv('STRIPE_WEBHOOK_SECRET')
     webhook_secret = 'whsec_phTbXiZIQeBOoyONRkEucUkmSaDIqzZn' # I copied this from the command line when pairing the CLI with my account
-    request_data = json.loads(request.data)
 
-    if webhook_secret:
-        # Retrieve the event by verifying the signature using the raw body and secret if webhook signing is configured.
-        signature = request.headers.get('stripe-signature')
-        try:
-            event = stripe.Webhook.construct_event(
-                payload=request.data, sig_header=signature, secret=webhook_secret)
-            data = event['data']
-        except Exception as e:
-            return e
-        # Get the type of webhook event sent - used to check the status of PaymentIntents.
-        event_type = event['type']
-    else:
-        data = request_data['data']
-        event_type = request_data['type']
-    data_object = data['object']
+    try:
+        request_data = json.loads(request.data)
 
-    print('event ' + event_type)
+        if webhook_secret:
+            # Retrieve the event by verifying the signature using the raw body and secret if webhook signing is configured.
+            signature = request.headers.get('stripe-signature')
+            try:
+                event = stripe.Webhook.construct_event(
+                    payload=request.data, sig_header=signature, secret=webhook_secret)
+                data = event['data']
+            except Exception as e:
+                return e
+            # Get the type of webhook event sent - used to check the status of PaymentIntents.
+            event_type = event['type']
+        else:
+            data = request_data['data']
+            event_type = request_data['type']
+        data_object = data['object']
 
-    if event_type == 'checkout.session.completed':
-        print('Event: checkout.session.completed')
-        client_id = data_object["client_reference_id"]
-        print(client_id)
-        customer_stripe_id = data_object["customer"]
-        payment_status = data_object["payment_status"]
-        create_new_customer(client_id, customer_stripe_id, payment_status)
-    elif event_type == 'invoice.paid':
-        print('Event: invoice.paid')
-        stripe_customer_id = data_object["customer"]
-        update_customer_payment_status(stripe_customer_id, 'paid')
-    elif event_type == 'invoice.payment_failed':
-        print('Event: invoice.payment_failed')
-        stripe_customer_id = data_object["customer"]
-        update_customer_payment_status(stripe_customer_id, 'unpaid')
+        if event_type == 'checkout.session.completed':
+            logging.info('Event: checkout.session.completed')
+            client_id = data_object["client_reference_id"]
+            customer_stripe_id = data_object["customer"]
+            subscription_stripe_id = data_object["subscription"]
+            payment_status = data_object["payment_status"]
+            create_new_subscription(client_id, customer_stripe_id, subscription_stripe_id, payment_status)
+        elif event_type == 'invoice.paid':
+            logging.info('Event: invoice.paid')
+            stripe_subscription_id = data_object["subscription"]
+            update_subscription_payment_status(stripe_subscription_id, 'ISPAID')
+        elif event_type == 'invoice.payment_failed':
+            logging.info('Event: invoice.payment_failed')
+            stripe_subscription_id = data_object["subscription"]
+            update_subscription_payment_status(stripe_subscription_id, 'UNPAID')
+        elif event_type == 'customer.subscription.deleted':
+            logging.info('Event: customer.subscription.deleted')
+            stripe_subscription_id = data_object["id"]
+            delete_subscription(stripe_subscription_id)
 
-    return jsonify({'status': 'success'})
+        return jsonify({'status': 'success'})
+
+    except:
+        logging.exception("message")
+        return jsonify({'status': 'failure'}), 400
+
 
 
 if __name__ == '__main__':
